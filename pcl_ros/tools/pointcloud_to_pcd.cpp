@@ -74,6 +74,7 @@ class PointCloudToPCD
     std::string fixed_frame_;
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
+    int num_conversion_;
 
   public:
     string cloud_topic_;
@@ -82,8 +83,7 @@ class PointCloudToPCD
 
     ////////////////////////////////////////////////////////////////////////////////
     // Callback
-    void
-      cloud_cb (const pcl::PCLPointCloud2::ConstPtr& cloud)
+    void cloud_cb (const pcl::PCLPointCloud2::ConstPtr& cloud)
     {
       if ((cloud->width * cloud->height) == 0)
         return;
@@ -114,56 +114,75 @@ class PointCloudToPCD
 
       pcl::PCDWriter writer;
       if(binary_)
-	{
-	  if(compressed_)
-	    {
-	      writer.writeBinaryCompressed (ss.str (), *cloud, v, q);
-	    }
-	  else
-	    {
-	      writer.writeBinary (ss.str (), *cloud, v, q);
-	    }
-	}
+      {
+        if(compressed_)
+        {
+          writer.writeBinaryCompressed (ss.str (), *cloud, v, q);
+        }
+        else
+        {
+          writer.writeBinary (ss.str (), *cloud, v, q);
+        }
+      }
       else
-	{
-	  writer.writeASCII (ss.str (), *cloud, v, q, 8);
-	}
+      {
+        writer.writeASCII (ss.str (), *cloud, v, q, 8);
+      }
+
+      static int saved_count = 0;
+      if(num_conversion_ != 0){
+        saved_count++;
+        if(saved_count >= num_conversion_){
+          exit(EXIT_SUCCESS);
+        }
+      }
 
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    PointCloudToPCD () : binary_(false), compressed_(false), tf_listener_(tf_buffer_)
+    PointCloudToPCD () : binary_(false), compressed_(false), tf_listener_(tf_buffer_), num_conversion_(0)
     {
       // Check if a prefix parameter is defined for output file names.
       ros::NodeHandle priv_nh("~");
       if (priv_nh.getParam ("prefix", prefix_))
-        {
-          ROS_INFO_STREAM ("PCD file prefix is: " << prefix_);
-        }
+      {
+        ROS_INFO_STREAM ("PCD file prefix is: " << prefix_);
+      }
       else if (nh_.getParam ("prefix", prefix_))
-        {
-          ROS_WARN_STREAM ("Non-private PCD prefix parameter is DEPRECATED: "
-                           << prefix_);
-        }
+      {
+        ROS_WARN_STREAM ("Non-private PCD prefix parameter is DEPRECATED: "
+                          << prefix_);
+      }
 
       priv_nh.getParam ("fixed_frame", fixed_frame_);
       priv_nh.getParam ("binary", binary_);
       priv_nh.getParam ("compressed", compressed_);
+      priv_nh.getParam ("num_conversion", num_conversion_);
+      
       if(binary_)
-	{
-	  if(compressed_)
 	    {
-	      ROS_INFO_STREAM ("Saving as binary compressed PCD");
+        if(compressed_)
+        {
+          ROS_INFO_STREAM ("Saving as binary compressed PCD");
+        }
+        else
+        {
+          ROS_INFO_STREAM ("Saving as binary PCD");
+        }
 	    }
-	  else
-	    {
-	      ROS_INFO_STREAM ("Saving as binary PCD");
-	    }
-	}
       else
-	{
-	  ROS_INFO_STREAM ("Saving as binary PCD");
-	}
+      {
+        ROS_INFO_STREAM ("Saving as ASCII PCD");
+      }
+
+      if(num_conversion_==0)
+      {
+        ROS_INFO_STREAM ("Continue as long as data is received");
+      }
+      else
+      {
+        ROS_INFO ("The number of conversions is %d", num_conversion_);
+      }
 
       cloud_topic_ = "input";
 
@@ -174,8 +193,7 @@ class PointCloudToPCD
 };
 
 /* ---[ */
-int
-  main (int argc, char** argv)
+int main (int argc, char** argv)
 {
   ros::init (argc, argv, "pointcloud_to_pcd", ros::init_options::AnonymousName);
 
